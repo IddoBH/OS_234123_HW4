@@ -3,6 +3,7 @@
 //
 
 #include <unistd.h>
+#include <iostream>
 #include "malloc_2.h"
 
 struct MallocMetadata{
@@ -47,7 +48,7 @@ void* smalloc(size_t size){
 
     if (no_blocks_allocated()) return init_blocks_list(size);
 
-    for (MallocMetadata* iter = _BLOCKS; iter != NULL ; iter = iter->next)
+    for (MallocMetadata* iter = _BLOCKS; iter != NULL; iter = iter->next)
         if(block_fits(iter, size)) return repupose_block(iter);
 
     return allocate_new_block(size);
@@ -63,6 +64,44 @@ void *repupose_block(MallocMetadata *block) {
 void sfree(void *p) {
     MallocMetadata* pmd = (MallocMetadata*) p;
     pmd->is_free = true;
+}
+
+size_t _size_meta_data() {
+    return sizeof(struct MallocMetadata);
+}
+
+size_t _num_allocated_blocks() {
+    size_t counter = 0;
+    for (MallocMetadata* iter = _BLOCKS; iter != NULL ; iter = iter->next) ++counter;
+    return counter;
+}
+
+size_t _num_meta_data_bytes() {
+    return _num_allocated_blocks() * _size_meta_data();
+}
+
+size_t _num_allocated_bytes() {
+    size_t counter = 0;
+    for (MallocMetadata* iter = _BLOCKS; iter != NULL ; iter = iter->next){
+        counter += iter->size;
+    }
+    return counter;
+}
+
+size_t _num_free_blocks() {
+    size_t counter = 0;
+    for (MallocMetadata* iter = _BLOCKS; iter != NULL ; iter = iter->next){
+        counter += (iter->is_free);
+    }
+    return counter;
+}
+
+size_t _num_free_bytes() {
+    size_t counter = 0;
+    for (MallocMetadata* iter = _BLOCKS; iter != NULL ; iter = iter->next){
+        counter += (iter->is_free) * iter->size;
+    }
+    return counter;
 }
 
 void *allocate_new_block(size_t size) {
@@ -93,7 +132,7 @@ void *init_blocks_list(size_t size) {
     return _BLOCKS;
 }
 
-MallocMetadata *allocate_metadata() { return (MallocMetadata*)(sbrk(sizeof(struct MallocMetadata))); }
+MallocMetadata *allocate_metadata() { return (MallocMetadata*)(sbrk(_size_meta_data())); }
 
 bool no_blocks_allocated() { return _BLOCKS == NULL; }
 
