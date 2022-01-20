@@ -11,7 +11,11 @@ static void *const SMALLOC_FAIL_VALUE = NULL;
 
 void* smalloc(size_t size);
 
+void* scalloc(size_t num, size_t size);
+
 void sfree(void* p);
+
+void* srealloc(void* oldp, size_t size);
 
 
 size_t _num_free_blocks();

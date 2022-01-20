@@ -63,6 +63,54 @@ int main() {
     std::cout << three << std::endl;
     print_malloc_2_metrics();
 
+    void* two_ints;
+    two_ints = scalloc(2, sizeof(int));
+    std::cout << two_ints << std::endl;
+    print_malloc_2_metrics();
+    for (int i = 0; i < 2; ++i) {
+        std::cout << (int)*((char*)two_ints + _size_meta_data() + sizeof(int)*i) << std::endl;
+    }
+    *((char*)two_ints + _size_meta_data()) = 1;
+
+    void* six_chars;
+    six_chars = scalloc(6, sizeof(char));
+    std::cout << six_chars << std::endl;
+    print_malloc_2_metrics();
+    for (int i = 0; i < 6; ++i) {
+        std::cout << (char)*((char*)six_chars + _size_meta_data() + sizeof(char)*i) << std::endl;
+    }
+
+    sfree(max);
+    print_malloc_2_metrics();
+    void* bigger_ti = srealloc(two_ints, 500);
+    print_malloc_2_metrics();
+    for (int i = 0; i < 3; ++i) {
+        std::cout << (int)*((char*)bigger_ti + _size_meta_data() + sizeof(int)*i) << std::endl;
+    }
+
+    void* four = scalloc(4, sizeof(char));
+    *((char*)four + _size_meta_data() + sizeof(char)*0) = 'f';
+    *((char*)four + _size_meta_data() + sizeof(char)*1) = 'o';
+    *((char*)four + _size_meta_data() + sizeof(char)*2) = 'u';
+    *((char*)four + _size_meta_data() + sizeof(char)*3) = 'r';
+    for (int i = 0; i < 4; ++i) {
+        std::cout << (char)*((char*)four + _size_meta_data() + sizeof(char)*i) << std::endl;
+    }
+    print_malloc_2_metrics();
+    void* four_plus = srealloc(four, 100);
+    print_malloc_2_metrics();
+    for (int i = 0; i < 5; ++i) {
+        std::cout << (char)*((char*)four_plus + _size_meta_data() + sizeof(char)*i) << std::endl;
+    }
+    four = srealloc(four_plus, 8);
+    for (int i = 0; i < 5; ++i) {
+        std::cout << (char)*((char*)four + _size_meta_data() + sizeof(char)*i) << std::endl;
+    }
+    print_malloc_2_metrics();
+    void *null_re = srealloc(NULL, 16);
+    print_malloc_2_metrics();
+
+
     return 0;
 }
 

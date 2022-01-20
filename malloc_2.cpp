@@ -43,6 +43,10 @@ void *repupose_block(MallocMetadata *block);
 
 bool block_fits(const MallocMetadata *block, size_t wanted);
 
+void set_zeroes(const void *new_block, size_t num, size_t size);
+
+void copy_data(const void *from, const void *to, size_t size);
+
 void* smalloc(size_t size){
     if (invalid_size(size)) return SMALLOC_FAIL_VALUE;
 
@@ -62,7 +66,7 @@ void *repupose_block(MallocMetadata *block) {
 }
 
 void sfree(void *p) {
-    MallocMetadata* pmd = (MallocMetadata*) p;
+    struct MallocMetadata* pmd = (MallocMetadata*) p;
     pmd->is_free = true;
 }
 
@@ -103,6 +107,31 @@ size_t _num_free_bytes() {
     }
     return counter;
 }
+
+void *scalloc(size_t num, size_t size) {
+    void* new_block = smalloc(num * size);
+    if (new_block == SMALLOC_FAIL_VALUE) return SMALLOC_FAIL_VALUE;
+    set_zeroes(new_block, num, size);
+    return new_block;
+}
+
+void *srealloc(void *oldp, size_t size) {
+    if (oldp == NULL) return allocate_new_block(size);
+    struct MallocMetadata* mdp = (MallocMetadata*) oldp;
+    if (size <= mdp->size) return oldp;
+    void* out = smalloc(size);
+    if(out == SMALLOC_FAIL_VALUE) return SMALLOC_FAIL_VALUE;
+    copy_data(oldp, out, size);
+    sfree(oldp);
+    return out;
+}
+
+void copy_data(const void *from, const void *to, size_t size) {
+    struct MallocMetadata* mdp = (MallocMetadata*) from;
+    for (size_t i = 0; i < size && i < mdp->size; ++i) *((char*)to + _size_meta_data() + i) = *((char*)from + _size_meta_data() + i);
+}
+
+void set_zeroes(const void *new_block, size_t num, size_t size) { for (size_t i = 0; i < num * size; ++i) *((char*)new_block + _size_meta_data() + i) = 0; }
 
 void *allocate_new_block(size_t size) {
     _LAST->next = allocate_metadata();
