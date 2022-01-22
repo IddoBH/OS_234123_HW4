@@ -1,7 +1,7 @@
 #include <iostream>
 //#include "malloc_1.h"
-#include "malloc_2.h"
-//#include "malloc_3.h"
+//#include "malloc_2.h"
+#include "malloc_3.h"
 
 void test_malloc_1();
 
@@ -11,20 +11,36 @@ void test_malloc_2();
 
 int main() {
 //    test_malloc_1();
-    test_malloc_2();
+//    test_malloc_2();
     std::cout << std::endl << "Malloc 3:" << std::endl << std::endl;
 
-//    void *kb100 = scalloc(100,1024);
-//    void *kb20 = scalloc(20,1024);
-//    void *kb50 = scalloc(50,1024);
-//    sfree(kb100);
-//    sfree(kb50);
-//    sfree(kb20);
-//    print_malloc_2_metrics();
-//    void *kb30 = smalloc(30*1024);
-//    print_malloc_2_metrics();
-//    srealloc(kb30, 60*1024);
-//    print_malloc_2_metrics();
+    void *kb100 = scalloc(100,1024);
+    void *kb20 = scalloc(20,1024);
+    void *kb50 = scalloc(50,1024);
+    sfree(kb100);
+    sfree(kb50);
+    sfree(kb20);
+    print_malloc_2_metrics();
+    void *kb30 = smalloc(30*1024);
+    print_malloc_2_metrics();
+    srealloc(kb30, 60*1024);
+    print_malloc_2_metrics();
+
+    void *kb90_500 = smalloc(90*1024+500);
+    void *kb90_100 = smalloc(90*1024+100);
+    void *kb90_300 = smalloc(90*1024+300);
+    void *kb90_290 = smalloc(90*1024+290);
+    print_malloc_2_metrics();
+    sfree(kb90_500);
+    sfree(kb90_100);
+    sfree(kb90_300);
+    print_malloc_2_metrics();
+    size_t before = _num_free_bytes();
+    void *kb90_280 = smalloc(90*1024+280);
+    print_malloc_2_metrics();
+    std::cout << "Used for realloc: " << (before - _num_free_bytes()) % 1024 << " bytes." << std::endl;
+
+
 
     return 0;
 }
