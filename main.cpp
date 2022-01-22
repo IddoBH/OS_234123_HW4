@@ -1,7 +1,7 @@
 #include <iostream>
 //#include "malloc_1.h"
-//#include "malloc_2.h"
-#include "malloc_3.h"
+#include "malloc_2.h"
+//#include "malloc_3.h"
 
 void test_malloc_1();
 
@@ -11,20 +11,20 @@ void test_malloc_2();
 
 int main() {
 //    test_malloc_1();
-//    test_malloc_2();
+    test_malloc_2();
     std::cout << std::endl << "Malloc 3:" << std::endl << std::endl;
 
-    void *kb100 = scalloc(100,1024);
-    void *kb20 = scalloc(20,1024);
-    void *kb50 = scalloc(50,1024);
-    sfree(kb100);
-    sfree(kb50);
-    sfree(kb20);
-    print_malloc_2_metrics();
-    void *kb30 = smalloc(30*1024);
-    print_malloc_2_metrics();
-    srealloc(kb30, 60*1024);
-    print_malloc_2_metrics();
+//    void *kb100 = scalloc(100,1024);
+//    void *kb20 = scalloc(20,1024);
+//    void *kb50 = scalloc(50,1024);
+//    sfree(kb100);
+//    sfree(kb50);
+//    sfree(kb20);
+//    print_malloc_2_metrics();
+//    void *kb30 = smalloc(30*1024);
+//    print_malloc_2_metrics();
+//    srealloc(kb30, 60*1024);
+//    print_malloc_2_metrics();
 
     return 0;
 }
