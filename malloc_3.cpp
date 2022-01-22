@@ -13,11 +13,13 @@ struct MallocMetadata{
     MallocMetadata* prev;
 };
 
-struct MallocMetadata* _BLOCKS = NULL;
-struct MallocMetadata* _LAST = NULL;
-
-
 static const int MAX_SMALLOC_SIZE = 100000000;
+static const size_t BIN_SIZE = 1024;
+
+static const int NUMBER_OF_BINS = 128;
+
+struct MallocMetadata* _BLOCKS[NUMBER_OF_BINS] = {NULL};
+struct MallocMetadata* _LAST[NUMBER_OF_BINS] = {NULL};
 
 bool invalid_size(size_t size);
 
@@ -50,10 +52,13 @@ void copy_data(const void *from, const void *to, size_t size);
 void* smalloc(size_t size){
     if (invalid_size(size)) return SMALLOC_FAIL_VALUE;
 
-    if (no_blocks_allocated()) return init_blocks_list(size);
+//    if (no_blocks_allocated()) return init_blocks_list(size);
 
-    for (MallocMetadata* iter = _BLOCKS; iter != NULL; iter = iter->next)
-        if(block_fits(iter, size)) return repupose_block(iter);
+    for(int bin = size / BIN_SIZE; bin < NUMBER_OF_BINS; ++bin){
+        for (MallocMetadata* iter = _BLOCKS[bin]; iter != NULL; iter = iter->next)
+            if(block_fits(iter, size)) return repupose_block(iter);
+    }
+        
 
     return allocate_new_block(size);
 }
@@ -76,7 +81,8 @@ size_t _size_meta_data() {
 
 size_t _num_allocated_blocks() {
     size_t counter = 0;
-    for (MallocMetadata* iter = _BLOCKS; iter != NULL ; iter = iter->next) ++counter;
+    for(int bin = 0; bin < NUMBER_OF_BINS; ++bin)
+        for (MallocMetadata *iter = _BLOCKS[bin]; iter != NULL; iter = iter->next) ++counter;
     return counter;
 }
 
@@ -86,25 +92,25 @@ size_t _num_meta_data_bytes() {
 
 size_t _num_allocated_bytes() {
     size_t counter = 0;
-    for (MallocMetadata* iter = _BLOCKS; iter != NULL ; iter = iter->next){
-        counter += iter->size;
-    }
+    for(int bin = 0; bin < NUMBER_OF_BINS; ++bin)
+        for (MallocMetadata* iter = _BLOCKS[bin]; iter != NULL ; iter = iter->next) counter += iter->size;
+
     return counter;
 }
 
 size_t _num_free_blocks() {
     size_t counter = 0;
-    for (MallocMetadata* iter = _BLOCKS; iter != NULL ; iter = iter->next){
-        counter += (iter->is_free);
-    }
+    for(int bin = 0; bin < NUMBER_OF_BINS; ++bin)
+        for (MallocMetadata* iter = _BLOCKS[bin]; iter != NULL ; iter = iter->next) counter += (iter->is_free);
+
     return counter;
 }
 
 size_t _num_free_bytes() {
     size_t counter = 0;
-    for (MallocMetadata* iter = _BLOCKS; iter != NULL ; iter = iter->next){
-        counter += (iter->is_free) * iter->size;
-    }
+    for(int bin = 0; bin < NUMBER_OF_BINS; ++bin)
+        for (MallocMetadata* iter = _BLOCKS[bin]; iter != NULL ; iter = iter->next)
+            counter += (iter->is_free) * iter->size;
     return counter;
 }
 
@@ -134,48 +140,53 @@ void copy_data(const void *from, const void *to, size_t size) {
 void set_zeroes(const void *new_block, size_t num, size_t size) { for (size_t i = 0; i < num * size; ++i) *((char*)new_block + _size_meta_data() + i) = 0; }
 
 void *allocate_new_block(size_t size) {
-    _LAST->next = allocate_metadata();
-    if (!sbrk_success(_LAST->next)) return undo_new_block();
+    size_t bin = size / BIN_SIZE;
+    if (no_blocks_allocated(bin)) return init_blocks_list(size);
+    _LAST[bin]->next = allocate_metadata();
+    if (!sbrk_success(_LAST[bin]->next)) return undo_new_block(bin);
     init_new_block(size);
     return sbrk_success(sbrk(size)) ? _LAST : SMALLOC_FAIL_VALUE;
 }
 
 void init_new_block(size_t size) {
-    _LAST->next->prev = _LAST;
-    _LAST = _LAST->next;
-    _LAST->next = NULL;
-    _LAST->is_free = false;
-    _LAST->size = size;
+    size_t bin = size / BIN_SIZE;
+    _LAST[bin]->next->prev = _LAST[bin];
+    _LAST[bin] = _LAST[bin]->next;
+    _LAST[bin]->next = NULL;
+    _LAST[bin]->is_free = false;
+    _LAST[bin]->size = size;
 }
 
 void *undo_new_block(size_t i) {
-    _LAST->next = NULL;
+    _LAST[i]->next = NULL;
     return SMALLOC_FAIL_VALUE;
 }
 
 void *init_blocks_list(size_t size) {
-    _BLOCKS = allocate_metadata();
-    if (!sbrk_success(_BLOCKS)) return undo_list_init();
+    size_t bin = size / BIN_SIZE;
+    _BLOCKS[bin] = allocate_metadata();
+    if (!sbrk_success(_BLOCKS)) return undo_list_init(bin);
     allocate_first_block(size);
-    if (!sbrk_success(sbrk(size))) return undo_list_init();
-    return _BLOCKS;
+    if (!sbrk_success(sbrk(size))) return undo_list_init(0);
+    return _BLOCKS[bin];
 }
 
 MallocMetadata *allocate_metadata() { return (MallocMetadata*)(sbrk(_size_meta_data())); }
 
-bool no_blocks_allocated(unsigned long i) { return _BLOCKS == NULL; }
+bool no_blocks_allocated(unsigned long i) { return _BLOCKS[i] == NULL; }
 
 void allocate_first_block(size_t size) {
-    _LAST = _BLOCKS;
-    _BLOCKS->next = NULL;
-    _BLOCKS->prev = NULL;
-    _BLOCKS->size = size;
-    _BLOCKS->is_free = false;
+    size_t bin = size/BIN_SIZE;
+    _LAST[bin] = _BLOCKS[bin];
+    _BLOCKS[bin]->next = NULL;
+    _BLOCKS[bin]->prev = NULL;
+    _BLOCKS[bin]->size = size;
+    _BLOCKS[bin]->is_free = false;
 }
 
 void *undo_list_init(size_t i) {
-    _BLOCKS = NULL;
-    _LAST = NULL;
+    _BLOCKS[i] = NULL;
+    _LAST[i] = NULL;
     return SMALLOC_FAIL_VALUE;
 }
 
