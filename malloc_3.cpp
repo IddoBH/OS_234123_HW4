@@ -83,6 +83,8 @@ void unite_adjacent_blocks(MallocMetadata *first, MallocMetadata *second);
 
 void unite_free_blocks_on_both_sides(MallocMetadata *pmd);
 
+void *expand_last_block(size_t size);
+
 void* smalloc(size_t size){
     if (invalid_size(size)) return SMALLOC_FAIL_VALUE;
 
@@ -247,10 +249,24 @@ void set_zeroes(const void *new_block, size_t num, size_t size) { for (size_t i 
 
 void *allocate_new_block(size_t size) {
     if (no_blocks_allocated()) return init_blocks_list_and_size_table(size);
+
+    if (_LAST->is_free) return expand_last_block(size);
+
     _LAST->next = allocate_metadata();
     if (!sbrk_success(_LAST->next)) return undo_new_block();
     init_new_block(size);
     return sbrk_success(sbrk(size)) ? _LAST : SMALLOC_FAIL_VALUE;
+}
+
+void *expand_last_block(size_t size) {
+    if(!sbrk_success(sbrk(size - _LAST->size))) return SMALLOC_FAIL_VALUE;
+
+    remove_old_block_from_bins(_LAST, _LAST->size);
+    _LAST->size = size;
+    _LAST->is_free = false;
+    insert_block_to_size_bins(_LAST);
+
+    return _LAST;
 }
 
 void *init_blocks_list_and_size_table(size_t size) {

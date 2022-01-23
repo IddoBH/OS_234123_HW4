@@ -11,6 +11,8 @@ void test_malloc_2();
 
 void test_challenge_0_1();
 
+void test_challenge_2();
+
 int main() {
 //    test_malloc_1();
 //    test_malloc_2();
@@ -18,6 +20,31 @@ int main() {
 
 //    test_challenge_0_1();
 
+//    test_challenge_2();
+
+    void *fill1 = smalloc(142);
+    void *fill2 = smalloc(300);
+    void *fill3 = smalloc(90*1024+100);
+    void *fill4 = smalloc(30*1024);
+    void *fill5 = smalloc(20*1024);
+    void *fill6 = smalloc(39*1024+900);
+    void *fill7 = smalloc(19*1024+900);
+    void *fill8 = smalloc(90*1024+500);
+    void *wilderness = smalloc(50);
+    print_malloc_2_metrics();
+    sfree(wilderness);
+    print_malloc_2_metrics();
+    wilderness = smalloc(100);
+    print_malloc_2_metrics();
+//
+//    void *first_to_merge = smalloc(1024+512);
+//    void *second_to_merge = smalloc(1024+512);
+//    print_malloc_2_metrics();
+
+    return 0;
+}
+
+void test_challenge_2() {
     void *kb30 = scalloc(30, 1024);
     void *kb50 = scalloc(50,1024);
     print_malloc_2_metrics();
@@ -42,25 +69,6 @@ int main() {
     print_malloc_2_metrics();
     sfree(kb50);
     print_malloc_2_metrics();
-
-
-
-
-    //    void *fill1 = smalloc(142);
-//    void *fill2 = smalloc(300);
-//    void *fill3 = smalloc(90*1024+100);
-//    void *fill4 = smalloc(30*1024);
-//    void *fill5 = smalloc(20*1024);
-//    void *fill6 = smalloc(39*1024+900);
-//    void *fill7 = smalloc(19*1024+900);
-//    void *fill8 = smalloc(90*1024+500);
-//    void *fill9 = smalloc(90*1024+110);
-//
-//    void *first_to_merge = smalloc(1024+512);
-//    void *second_to_merge = smalloc(1024+512);
-//    print_malloc_2_metrics();
-
-    return 0;
 }
 
 void test_challenge_0_1() {
