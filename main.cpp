@@ -36,9 +36,13 @@ int main() {
     sfree(kb90_300);
     print_malloc_2_metrics();
     size_t before = _num_free_bytes();
-    void *kb90_280 = smalloc(90*1024+280);
+    void *kb90_110 = smalloc(90*1024+110);
     print_malloc_2_metrics();
-    std::cout << "Used for realloc: " << (before - _num_free_bytes()) % 1024 << " bytes." << std::endl;
+
+    sfree(kb90_110);
+    before = _num_free_bytes();
+    void *kb_90_111 = smalloc(90*1024+111);
+    print_malloc_2_metrics();
 
 
 

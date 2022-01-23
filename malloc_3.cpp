@@ -45,9 +45,9 @@ void *undo_new_block();
 
 void init_new_block(size_t size);
 
-void *repurposeBlock(MallocMetadata *block);
+void *repurposeBlock(MallocMetadata *block, size_t wanted);
 
-bool block_fits(const MallocMetadata *block, size_t wanted);
+bool block_fits(const MallocMetadata* block, size_t wanted);
 
 void set_zeroes(const void *new_block, size_t num, size_t size);
 
@@ -55,30 +55,66 @@ void copy_data(const void *from, const void *to, size_t size);
 
 void *init_blocks_list_and_size_table(size_t size);
 
-void init_bin(size_t bin);
+void init_bin(size_t bin, MallocMetadata *new_block);
 
-void push_new_block_before_bin(size_t bin);
+void push_new_block_before_bin(size_t bin, MallocMetadata *new_block);
 
-void push_new_block_mid_bin(MallocMetadata *iter);
+void push_new_block_mid_bin(MallocMetadata *iter, MallocMetadata *new_block);
 
-void push_new_block_after_bin(size_t bin);
+void push_new_block_after_bin(size_t bin, MallocMetadata *new_block);
 
-void place_new_block_in_correct_order(size_t bin);
+void place_new_block_in_correct_order(size_t bin, MallocMetadata *new_block);
+
+void insert_block_to_size_bins(MallocMetadata *new_block);
 
 void* smalloc(size_t size){
     if (invalid_size(size)) return SMALLOC_FAIL_VALUE;
 
     for(size_t bin = size / BIN_SIZE; bin < SIZE_BINS_NUMBER; ++bin)
-        for (MallocMetadata* iter = _BLOCKS_BY_SIZE[bin]; iter != NULL; iter = iter->next)
-            if(block_fits(iter, size)) return repurposeBlock(iter);
+        for (MallocMetadata* iter = _BLOCKS_BY_SIZE[bin]; iter != NULL; iter = iter->next_size)
+            if(block_fits(iter, size)) return repurposeBlock(iter, size);
 
     return allocate_new_block(size);
 }
 
 bool block_fits(const MallocMetadata *block, size_t wanted) { return block->is_free && block->size >= wanted; }
 
-void *repurposeBlock(MallocMetadata *block) {
+void *repurposeBlock(MallocMetadata *block, size_t wanted) {
     block->is_free = false;
+    size_t full = block->size;
+    size_t remaining_space = full - wanted;
+    if (remaining_space >= 128 + _size_meta_data()){
+        void * new_block = ((char*)block + _size_meta_data() + wanted);
+        MallocMetadata* residue = (MallocMetadata*)new_block;
+        residue->is_free = true;
+        residue->size = remaining_space - _size_meta_data();
+
+        block->size = wanted;
+
+        residue->next = block->next;
+        if(block->next != NULL) block->next->prev = residue;
+        else _LAST = residue;
+        residue->prev = block;
+        block->next = residue;
+
+        size_t bin = full / BIN_SIZE;
+        if (block->next_size == NULL){
+            if (block->prev_size == NULL) _BLOCKS_BY_SIZE[bin] = NULL;
+            else block->prev_size->next_size = NULL;
+        } else{
+            if (block->prev_size == NULL) {
+                _BLOCKS_BY_SIZE[bin] = block->next_size;
+                block->next_size->prev_size = NULL;
+            }
+            else{
+                block->prev_size->next_size = block->next_size;
+                block->next_size->prev_size = block->prev_size;
+            } 
+        }
+
+        insert_block_to_size_bins(block);
+        insert_block_to_size_bins(residue);
+    }
     return block;
 }
 
@@ -172,42 +208,47 @@ void init_new_block(size_t size) {
     _LAST->next = NULL;
     _LAST->is_free = false;
     _LAST->size = size;
-    size_t bin = size / BIN_SIZE;
-    if(_BLOCKS_BY_SIZE[bin] == NULL) init_bin(bin);
-    else if(_BLOCKS_BY_SIZE[bin]->size > _LAST->size) push_new_block_before_bin(bin);
-    else place_new_block_in_correct_order(bin);
-
+    insert_block_to_size_bins(_LAST);
 }
 
-void place_new_block_in_correct_order(size_t bin) {
+void insert_block_to_size_bins(MallocMetadata *new_block) {
+    if(_BLOCKS_BY_SIZE[new_block->size/BIN_SIZE] == NULL) init_bin(new_block->size/BIN_SIZE, new_block);
+    else if(_BLOCKS_BY_SIZE[new_block->size/BIN_SIZE]->size > new_block->size) push_new_block_before_bin(new_block->size/BIN_SIZE, new_block);
+    else place_new_block_in_correct_order(new_block->size/BIN_SIZE, new_block);
+}
+
+void place_new_block_in_correct_order(size_t bin, MallocMetadata *new_block) {
     for(MallocMetadata* iter = _BLOCKS_BY_SIZE[bin]; iter != NULL; iter = iter->next_size)
-        if(iter->size > _LAST->size) push_new_block_mid_bin(iter);
-    push_new_block_after_bin(bin);
+        if(iter->size > new_block->size) {
+            push_new_block_mid_bin(iter, new_block);
+            return;
+        }
+    push_new_block_after_bin(bin, new_block);
 }
 
-void push_new_block_after_bin(size_t bin) {
-    _LAST->prev_size = _LAST_BY_SIZE[bin];
-    _LAST->next_size = NULL;
-    _LAST_BY_SIZE[bin]->next_size = _LAST;
-    _LAST_BY_SIZE[bin] = _LAST;
+void push_new_block_after_bin(size_t bin, MallocMetadata *new_block) {
+    new_block->prev_size = _LAST_BY_SIZE[bin];
+    new_block->next_size = NULL;
+    _LAST_BY_SIZE[bin]->next_size = new_block;
+    _LAST_BY_SIZE[bin] = new_block;
 }
 
-void push_new_block_mid_bin(MallocMetadata *iter) {
-    iter->prev_size->next_size = _LAST;
-    _LAST->prev_size = iter->prev_size;
-    iter->prev_size = _LAST;
-    _LAST->next_size = iter;
+void push_new_block_mid_bin(MallocMetadata *iter, MallocMetadata *new_block) {
+    iter->prev_size->next_size = new_block;
+    new_block->prev_size = iter->prev_size;
+    iter->prev_size = new_block;
+    new_block->next_size = iter;
 }
 
-void push_new_block_before_bin(size_t bin) {
-    _LAST->prev_size = NULL;
-    _BLOCKS_BY_SIZE[bin]->prev_size = _LAST;
-    _LAST->next_size = _BLOCKS_BY_SIZE[bin];
-    _BLOCKS_BY_SIZE[bin] = _LAST;
+void push_new_block_before_bin(size_t bin, MallocMetadata *new_block) {
+    new_block->prev_size = NULL;
+    _BLOCKS_BY_SIZE[bin]->prev_size = new_block;
+    new_block->next_size = _BLOCKS_BY_SIZE[bin];
+    _BLOCKS_BY_SIZE[bin] = new_block;
 }
 
-void init_bin(size_t bin) {
-    _BLOCKS_BY_SIZE[bin] = _LAST;
+void init_bin(size_t bin, MallocMetadata *new_block) {
+    _BLOCKS_BY_SIZE[bin] = new_block;
     _BLOCKS_BY_SIZE[bin]->next_size = NULL;
     _BLOCKS_BY_SIZE[bin]->prev_size = NULL;
     _LAST_BY_SIZE[bin] = _BLOCKS_BY_SIZE[bin];
