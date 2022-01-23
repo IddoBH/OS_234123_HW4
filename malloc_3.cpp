@@ -67,6 +67,18 @@ void place_new_block_in_correct_order(size_t bin, MallocMetadata *new_block);
 
 void insert_block_to_size_bins(MallocMetadata *new_block);
 
+MallocMetadata *seperate_block(const MallocMetadata *block, size_t wanted);
+
+bool large_enough(size_t remaining_space);
+
+void init_residue(size_t remaining_space, MallocMetadata *residue);
+
+void push_residue_to_block_list(MallocMetadata *block, MallocMetadata *residue);
+
+void remove_old_block_from_bins(MallocMetadata *block, size_t full);
+
+void divide_block(MallocMetadata *block, size_t wanted, size_t full, size_t remaining_space);
+
 void* smalloc(size_t size){
     if (invalid_size(size)) return SMALLOC_FAIL_VALUE;
 
@@ -83,39 +95,60 @@ void *repurposeBlock(MallocMetadata *block, size_t wanted) {
     block->is_free = false;
     size_t full = block->size;
     size_t remaining_space = full - wanted;
-    if (remaining_space >= 128 + _size_meta_data()){
-        void * new_block = ((char*)block + _size_meta_data() + wanted);
-        MallocMetadata* residue = (MallocMetadata*)new_block;
-        residue->is_free = true;
-        residue->size = remaining_space - _size_meta_data();
-
-        block->size = wanted;
-
-        residue->next = block->next;
-        if(block->next != NULL) block->next->prev = residue;
-        else _LAST = residue;
-        residue->prev = block;
-        block->next = residue;
-
-        size_t bin = full / BIN_SIZE;
-        if (block->next_size == NULL){
-            if (block->prev_size == NULL) _BLOCKS_BY_SIZE[bin] = NULL;
-            else block->prev_size->next_size = NULL;
-        } else{
-            if (block->prev_size == NULL) {
-                _BLOCKS_BY_SIZE[bin] = block->next_size;
-                block->next_size->prev_size = NULL;
-            }
-            else{
-                block->prev_size->next_size = block->next_size;
-                block->next_size->prev_size = block->prev_size;
-            } 
-        }
-
-        insert_block_to_size_bins(block);
-        insert_block_to_size_bins(residue);
-    }
+    if (large_enough(remaining_space)) divide_block(block, wanted, full, remaining_space);
     return block;
+}
+
+void divide_block(MallocMetadata *block, size_t wanted, size_t full, size_t remaining_space) {
+    MallocMetadata *residue = seperate_block(block, wanted);
+    init_residue(remaining_space, residue);
+
+    block->size = wanted;
+
+    push_residue_to_block_list(block, residue);
+
+    remove_old_block_from_bins(block, full);
+
+    insert_block_to_size_bins(block);
+    insert_block_to_size_bins(residue);
+}
+
+void remove_old_block_from_bins(MallocMetadata *block, size_t full) {
+    size_t bin = full / BIN_SIZE;
+    if (block->next_size == NULL){
+        if (block->prev_size == NULL) _BLOCKS_BY_SIZE[bin] = NULL;
+        else block->prev_size->next_size = NULL;
+    } else{
+        if (block->prev_size == NULL) {
+            _BLOCKS_BY_SIZE[bin] = block->next_size;
+            block->next_size->prev_size = NULL;
+        }
+        else{
+            block->prev_size->next_size = block->next_size;
+            block->next_size->prev_size = block->prev_size;
+        }
+    }
+}
+
+void push_residue_to_block_list(MallocMetadata *block, MallocMetadata *residue) {
+    residue->next = block->next;
+    if(block->next != NULL) block->next->prev = residue;
+    else _LAST = residue;
+    residue->prev = block;
+    block->next = residue;
+}
+
+void init_residue(size_t remaining_space, MallocMetadata *residue) {
+    residue->is_free = true;
+    residue->size = remaining_space - _size_meta_data();
+}
+
+bool large_enough(size_t remaining_space) { return remaining_space >= 128 + _size_meta_data(); }
+
+MallocMetadata *seperate_block(const MallocMetadata *block, size_t wanted) {
+    void * new_block = ((char*)block + _size_meta_data() + wanted);
+    MallocMetadata* residue = (MallocMetadata*)new_block;
+    return residue;
 }
 
 void sfree(void *p) {
