@@ -79,6 +79,10 @@ void remove_old_block_from_bins(MallocMetadata *block, size_t full);
 
 void divide_block(MallocMetadata *block, size_t wanted, size_t full, size_t remaining_space);
 
+void unite_adjacent_blocks(MallocMetadata *first, MallocMetadata *second);
+
+void unite_free_blocks_on_both_sides(MallocMetadata *pmd);
+
 void* smalloc(size_t size){
     if (invalid_size(size)) return SMALLOC_FAIL_VALUE;
 
@@ -154,6 +158,28 @@ MallocMetadata *seperate_block(const MallocMetadata *block, size_t wanted) {
 void sfree(void *p) {
     struct MallocMetadata* pmd = (MallocMetadata*) p;
     pmd->is_free = true;
+    unite_free_blocks_on_both_sides(pmd);
+}
+
+void unite_free_blocks_on_both_sides(MallocMetadata *pmd) {
+    if(pmd->next != NULL && pmd->next->is_free) unite_adjacent_blocks(pmd, pmd->next);
+    if(pmd->prev != NULL && pmd->prev->is_free) unite_adjacent_blocks(pmd->prev, pmd);
+}
+
+void unite_adjacent_blocks(MallocMetadata *first, MallocMetadata *second) {
+    size_t first_size = first->size;
+    size_t second_size = second->size;
+
+    first->size += second->size + _size_meta_data();
+    first->next = second->next;
+
+    if (second->next != NULL) second->next->prev = first;
+    else _LAST = first;
+
+    remove_old_block_from_bins(first, first_size);
+    remove_old_block_from_bins(second, second_size);
+
+    insert_block_to_size_bins(first);
 }
 
 size_t _size_meta_data() {

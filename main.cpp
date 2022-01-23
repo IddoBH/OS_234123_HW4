@@ -9,16 +9,68 @@ void print_malloc_2_metrics();
 
 void test_malloc_2();
 
+void test_challenge_0_1();
+
 int main() {
 //    test_malloc_1();
 //    test_malloc_2();
     std::cout << std::endl << "Malloc 3:" << std::endl << std::endl;
 
-    void *kb100 = scalloc(100,1024);
+//    test_challenge_0_1();
+
+    void *kb30 = scalloc(30, 1024);
+    void *kb50 = scalloc(50,1024);
+    print_malloc_2_metrics();
+    sfree(kb50);
+    print_malloc_2_metrics();
+    sfree(kb30);
+    print_malloc_2_metrics();
+    kb30 = scalloc(30, 1024);
+    kb50 = scalloc(50,1024);
+    print_malloc_2_metrics();
+    sfree(kb30);
+    print_malloc_2_metrics();
+    sfree(kb50);
+    print_malloc_2_metrics();
+    kb30 = scalloc(30, 1024);
+    kb50 = scalloc(50,1024);
+    void *kb10 = scalloc(10, 1024);
+    print_malloc_2_metrics();
+    sfree(kb30);
+    print_malloc_2_metrics();
+    sfree(kb10);
+    print_malloc_2_metrics();
+    sfree(kb50);
+    print_malloc_2_metrics();
+
+
+
+
+    //    void *fill1 = smalloc(142);
+//    void *fill2 = smalloc(300);
+//    void *fill3 = smalloc(90*1024+100);
+//    void *fill4 = smalloc(30*1024);
+//    void *fill5 = smalloc(20*1024);
+//    void *fill6 = smalloc(39*1024+900);
+//    void *fill7 = smalloc(19*1024+900);
+//    void *fill8 = smalloc(90*1024+500);
+//    void *fill9 = smalloc(90*1024+110);
+//
+//    void *first_to_merge = smalloc(1024+512);
+//    void *second_to_merge = smalloc(1024+512);
+//    print_malloc_2_metrics();
+
+    return 0;
+}
+
+void test_challenge_0_1() {
+    void *kb100 = scalloc(100, 1024);
     void *kb20 = scalloc(20,1024);
     void *kb50 = scalloc(50,1024);
     sfree(kb100);
+    print_malloc_2_metrics();
     sfree(kb50);
+    print_malloc_2_metrics();
     sfree(kb20);
     print_malloc_2_metrics();
     void *kb30 = smalloc(30*1024);
@@ -43,10 +95,6 @@ int main() {
     before = _num_free_bytes();
     void *kb_90_111 = smalloc(90*1024+111);
     print_malloc_2_metrics();
-
-
-
-    return 0;
 }
 
 void test_malloc_2() {
