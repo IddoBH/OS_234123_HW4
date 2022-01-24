@@ -93,14 +93,28 @@ void *expand_last_block(size_t size);
 
 bool small_block(size_t size);
 
+bool two_blocks_fit(size_t size, const MallocMetadata *block1, MallocMetadata *block2);
+
+void *use_same_block(void *oldp, size_t size, MallocMetadata *mdp);
+
+void *use_same_block_with_prev(size_t size, MallocMetadata *mdp);
+
+void *use_same_block_with_next(size_t size, MallocMetadata *mdp);
+
+void *use_3_blocks(size_t size, MallocMetadata *mdp);
+
 size_t _size_meta_data() {
     return sizeof(struct MallocMetadata);
 }
 
 size_t _num_allocated_blocks() {
     size_t counter = 0;
-    for (MallocMetadata* iter = _BLOCKS; iter != NULL ; iter = iter->next) ++counter;
-    for (MallocMetadata* iter = _BLOCKS_XL; iter != NULL ; iter = iter->next) ++counter;
+    for (MallocMetadata* iter = _BLOCKS; iter != NULL ; iter = iter->next){
+        ++counter;
+    }
+    for (MallocMetadata* iter = _BLOCKS_XL; iter != NULL ; iter = iter->next) {
+        ++counter;
+    }
     return counter;
 }
 
@@ -220,8 +234,8 @@ void sfree(void *p) {
                 pmd->next->prev = pmd->prev;
             }
         }
+        munmap(p, pmd->size + _size_meta_data());
     }
-    munmap(p, pmd->size + _size_meta_data());
 }
 
 bool small_block(size_t size) { return size < BIN_SIZE * SIZE_BINS_NUMBER; }
@@ -257,12 +271,61 @@ void *scalloc(size_t num, size_t size) {
 void *srealloc(void *oldp, size_t size) {
     if (oldp == NULL) return allocate_new_block(size);
     struct MallocMetadata* mdp = (MallocMetadata*) oldp;
-    if (size <= mdp->size) return oldp;
+    if (size <= mdp->size)
+        return use_same_block(oldp, size, mdp);
+    if (two_blocks_fit(size, mdp, mdp->prev) && !two_blocks_fit(size, mdp, mdp->next))
+        return use_same_block_with_prev(size, mdp);
+    if (two_blocks_fit(size, mdp, mdp->next) && !two_blocks_fit(size, mdp, mdp->prev))
+        return use_same_block_with_next(size, mdp);
+    if (mdp->prev != NULL && mdp->prev->is_free && mdp->next != NULL && mdp->next->is_free && size <= (mdp->size + mdp->prev->size + mdp->next->size + 2*_size_meta_data()))
+        return use_3_blocks(size, mdp);
+    if (mdp->next == NULL) return expand_last_block(size);
     void* out = smalloc(size);
     if(out == SMALLOC_FAIL_VALUE) return SMALLOC_FAIL_VALUE;
     copy_data(oldp, out, size);
     sfree(oldp);
     return out;
+}
+
+void *use_3_blocks(size_t size, MallocMetadata *mdp) {
+    void* out = mdp->prev;
+    unite_free_blocks_on_both_sides(mdp);
+    MallocMetadata* out_md = (MallocMetadata*)out;
+    out_md->is_free = false;
+    size_t full = mdp->prev->size;
+    size_t remaining_space = full - size;
+    if (large_enough(remaining_space)) divide_block(mdp->prev, size, full, remaining_space);
+    return out;
+}
+
+void *use_same_block_with_next(size_t size, MallocMetadata *mdp) {
+    unite_adjacent_blocks(mdp, mdp->next);
+    mdp->is_free = false;
+    size_t full = mdp->size;
+    size_t remaining_space = full - size;
+    if (large_enough(remaining_space)) divide_block(mdp, size, full, remaining_space);
+    return mdp;
+}
+
+void *use_same_block_with_prev(size_t size, MallocMetadata *mdp) {
+    unite_adjacent_blocks(mdp->prev, mdp);
+    copy_data(mdp, mdp->prev, size);
+    mdp->prev->is_free = false;
+    size_t full = mdp->prev->size;
+    size_t remaining_space = full - size;
+    if (large_enough(remaining_space)) divide_block(mdp->prev, size, full, remaining_space);
+    return mdp->prev;
+}
+
+void *use_same_block(void *oldp, size_t size, MallocMetadata *mdp) {
+    size_t full = mdp->size;
+    size_t remaining_space = full - size;
+    if (large_enough(remaining_space)) divide_block(mdp, size, full, remaining_space);
+    return oldp;
+}
+
+bool two_blocks_fit(size_t size, const MallocMetadata *block1, MallocMetadata *block2) {
+    return block2 != NULL && block2->is_free && size <= block1->size + block2->size + _size_meta_data();
 }
 
 void copy_data(const void *from, const void *to, size_t size) {

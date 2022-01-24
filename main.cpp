@@ -15,6 +15,8 @@ void test_challenge_2();
 
 void test_ch_3();
 
+void test_ch_4();
+
 int main() {
 //    test_malloc_1();
 //    test_malloc_2();
@@ -24,8 +26,45 @@ int main() {
 
 //    test_challenge_2();
 
-    test_ch_3();
-    void* big = smalloc(200*1024);
+//    test_ch_3();
+//    test_ch_4();
+    void *fill1 = smalloc(142);
+    void *fill2 = smalloc(300);
+    void *fill3 = smalloc(90*1024+100);
+    void *fill4 = smalloc(500);
+    void *fill5 = smalloc(600);
+    print_malloc_2_metrics();
+    srealloc(fill3, 90*1024);
+    print_malloc_2_metrics();
+    sfree(fill2);
+    print_malloc_2_metrics();
+    srealloc(fill3, 90*1024+400);
+    print_malloc_2_metrics();
+    sfree(fill4);
+    print_malloc_2_metrics();
+    srealloc(fill2, 90*1024+900);
+    print_malloc_2_metrics();
+    sfree(fill1);
+    sfree(fill5);
+    print_malloc_2_metrics();
+    srealloc(fill2, 90*1024+1700);
+    print_malloc_2_metrics();
+    srealloc(fill1, 120*1024);
+    print_malloc_2_metrics();
+    smalloc(1);
+    print_malloc_2_metrics();
+
+
+    //
+//    void *first_to_merge = smalloc(1024+512);
+//    void *second_to_merge = smalloc(1024+512);
+//    print_malloc_2_metrics();
+
+    return 0;
+}
+
+void test_ch_4() {
+    void* big = smalloc(200 * 1024);
     print_malloc_2_metrics();
     void* big2 = smalloc(600*1024);
     print_malloc_2_metrics();
@@ -38,12 +77,6 @@ int main() {
     print_malloc_2_metrics();
     sfree(big3);
     print_malloc_2_metrics();
-    //
-//    void *first_to_merge = smalloc(1024+512);
-//    void *second_to_merge = smalloc(1024+512);
-//    print_malloc_2_metrics();
-
-    return 0;
 }
 
 void test_ch_3() {
