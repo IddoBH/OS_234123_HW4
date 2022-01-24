@@ -4,7 +4,9 @@
 
 #include <unistd.h>
 #include <iostream>
-#include "malloc_2.h"
+
+static void *const SMALLOC_FAIL_VALUE = NULL;
+
 
 struct MallocMetadata{
     size_t size;

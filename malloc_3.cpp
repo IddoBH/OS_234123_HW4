@@ -4,7 +4,10 @@
 
 #include <unistd.h>
 #include <iostream>
-#include "malloc_2.h"
+#include <sys/mman.h>
+
+static void *const SMALLOC_FAIL_VALUE = NULL;
+
 
 struct MallocMetadata{
     size_t size;
@@ -24,6 +27,8 @@ struct MallocMetadata* _LAST_BY_SIZE[SIZE_BINS_NUMBER] = {NULL};
 struct MallocMetadata* _BLOCKS = NULL;
 struct MallocMetadata* _LAST = NULL;
 
+struct MallocMetadata* _BLOCKS_XL = NULL;
+struct MallocMetadata* _LAST_XL = NULL;
 
 bool invalid_size(size_t size);
 
@@ -84,6 +89,45 @@ void unite_adjacent_blocks(MallocMetadata *first, MallocMetadata *second);
 void unite_free_blocks_on_both_sides(MallocMetadata *pmd);
 
 void *expand_last_block(size_t size);
+
+
+size_t _size_meta_data() {
+    return sizeof(struct MallocMetadata);
+}
+
+size_t _num_allocated_blocks() {
+    size_t counter = 0;
+    for (MallocMetadata* iter = _BLOCKS; iter != NULL ; iter = iter->next) ++counter;
+    return counter;
+}
+
+size_t _num_meta_data_bytes() {
+    return _num_allocated_blocks() * _size_meta_data();
+}
+
+size_t _num_allocated_bytes() {
+    size_t counter = 0;
+    for (MallocMetadata* iter = _BLOCKS; iter != NULL ; iter = iter->next){
+        counter += iter->size;
+    }
+    return counter;
+}
+
+size_t _num_free_blocks() {
+    size_t counter = 0;
+    for (MallocMetadata* iter = _BLOCKS; iter != NULL ; iter = iter->next){
+        counter += (iter->is_free);
+    }
+    return counter;
+}
+
+size_t _num_free_bytes() {
+    size_t counter = 0;
+    for (MallocMetadata* iter = _BLOCKS; iter != NULL ; iter = iter->next){
+        counter += (iter->is_free) * iter->size;
+    }
+    return counter;
+}
 
 void* smalloc(size_t size){
     if (invalid_size(size)) return SMALLOC_FAIL_VALUE;
@@ -184,44 +228,6 @@ void unite_adjacent_blocks(MallocMetadata *first, MallocMetadata *second) {
     insert_block_to_size_bins(first);
 }
 
-size_t _size_meta_data() {
-    return sizeof(struct MallocMetadata);
-}
-
-size_t _num_allocated_blocks() {
-    size_t counter = 0;
-    for (MallocMetadata* iter = _BLOCKS; iter != NULL ; iter = iter->next) ++counter;
-    return counter;
-}
-
-size_t _num_meta_data_bytes() {
-    return _num_allocated_blocks() * _size_meta_data();
-}
-
-size_t _num_allocated_bytes() {
-    size_t counter = 0;
-    for (MallocMetadata* iter = _BLOCKS; iter != NULL ; iter = iter->next){
-        counter += iter->size;
-    }
-    return counter;
-}
-
-size_t _num_free_blocks() {
-    size_t counter = 0;
-    for (MallocMetadata* iter = _BLOCKS; iter != NULL ; iter = iter->next){
-        counter += (iter->is_free);
-    }
-    return counter;
-}
-
-size_t _num_free_bytes() {
-    size_t counter = 0;
-    for (MallocMetadata* iter = _BLOCKS; iter != NULL ; iter = iter->next){
-        counter += (iter->is_free) * iter->size;
-    }
-    return counter;
-}
-
 void *scalloc(size_t num, size_t size) {
     void* new_block = smalloc(num * size);
     if (new_block == SMALLOC_FAIL_VALUE) return SMALLOC_FAIL_VALUE;
@@ -248,14 +254,21 @@ void copy_data(const void *from, const void *to, size_t size) {
 void set_zeroes(const void *new_block, size_t num, size_t size) { for (size_t i = 0; i < num * size; ++i) *((char*)new_block + _size_meta_data() + i) = 0; }
 
 void *allocate_new_block(size_t size) {
-    if (no_blocks_allocated()) return init_blocks_list_and_size_table(size);
+    if (size < BIN_SIZE*SIZE_BINS_NUMBER){
+        if (no_blocks_allocated()) return init_blocks_list_and_size_table(size);
 
-    if (_LAST->is_free) return expand_last_block(size);
+        if (_LAST->is_free) return expand_last_block(size);
 
-    _LAST->next = allocate_metadata();
-    if (!sbrk_success(_LAST->next)) return undo_new_block();
-    init_new_block(size);
-    return sbrk_success(sbrk(size)) ? _LAST : SMALLOC_FAIL_VALUE;
+        _LAST->next = allocate_metadata();
+        if (!sbrk_success(_LAST->next)) return undo_new_block();
+        init_new_block(size);
+        return sbrk_success(sbrk(size)) ? _LAST : SMALLOC_FAIL_VALUE;
+    }else{
+        void *out =
+                mmap(NULL, size, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, 0, 0);
+        if(out == MAP_FAILED) return NULL;
+
+    }
 }
 
 void *expand_last_block(size_t size) {

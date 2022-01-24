@@ -4,7 +4,7 @@
 
 #ifndef OS_234123_HW4_MALLOC_2_H
 #define OS_234123_HW4_MALLOC_2_H
-static void *const SMALLOC_FAIL_VALUE = NULL;
+
 
 #include <unistd.h>
 
