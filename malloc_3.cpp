@@ -38,7 +38,7 @@ void *undo_list_init();
 
 void allocate_first_block(size_t size);
 
-bool no_blocks_allocated();
+bool no_blocks_allocated(MallocMetadata *blocks_list);
 
 void *init_blocks_list(size_t size);
 
@@ -91,6 +91,8 @@ void unite_free_blocks_on_both_sides(MallocMetadata *pmd);
 void *expand_last_block(size_t size);
 
 
+bool small_block(size_t size);
+
 size_t _size_meta_data() {
     return sizeof(struct MallocMetadata);
 }
@@ -98,6 +100,7 @@ size_t _size_meta_data() {
 size_t _num_allocated_blocks() {
     size_t counter = 0;
     for (MallocMetadata* iter = _BLOCKS; iter != NULL ; iter = iter->next) ++counter;
+    for (MallocMetadata* iter = _BLOCKS_XL; iter != NULL ; iter = iter->next) ++counter;
     return counter;
 }
 
@@ -107,25 +110,22 @@ size_t _num_meta_data_bytes() {
 
 size_t _num_allocated_bytes() {
     size_t counter = 0;
-    for (MallocMetadata* iter = _BLOCKS; iter != NULL ; iter = iter->next){
-        counter += iter->size;
-    }
+    for (MallocMetadata* iter = _BLOCKS; iter != NULL ; iter = iter->next) counter += iter->size;
+    for (MallocMetadata* iter = _BLOCKS_XL; iter != NULL ; iter = iter->next) counter += iter->size;
     return counter;
 }
 
 size_t _num_free_blocks() {
     size_t counter = 0;
-    for (MallocMetadata* iter = _BLOCKS; iter != NULL ; iter = iter->next){
-        counter += (iter->is_free);
-    }
+    for (MallocMetadata* iter = _BLOCKS; iter != NULL ; iter = iter->next) counter += (iter->is_free);
+    for (MallocMetadata* iter = _BLOCKS_XL; iter != NULL ; iter = iter->next) counter += (iter->is_free);
     return counter;
 }
 
 size_t _num_free_bytes() {
     size_t counter = 0;
-    for (MallocMetadata* iter = _BLOCKS; iter != NULL ; iter = iter->next){
-        counter += (iter->is_free) * iter->size;
-    }
+    for (MallocMetadata* iter = _BLOCKS; iter != NULL ; iter = iter->next) counter += (iter->is_free) * iter->size;
+    for (MallocMetadata* iter = _BLOCKS_XL; iter != NULL ; iter = iter->next) counter += (iter->is_free) * iter->size;
     return counter;
 }
 
@@ -203,9 +203,28 @@ MallocMetadata *seperate_block(const MallocMetadata *block, size_t wanted) {
 
 void sfree(void *p) {
     struct MallocMetadata* pmd = (MallocMetadata*) p;
-    pmd->is_free = true;
-    unite_free_blocks_on_both_sides(pmd);
+    if (small_block(pmd->size)){
+        pmd->is_free = true;
+        unite_free_blocks_on_both_sides(pmd);
+    } else{
+        if (pmd->next == NULL){
+            if (pmd->prev == NULL) _BLOCKS_XL = NULL;
+            else pmd->prev->next = NULL;
+        } else{
+            if (pmd->prev == NULL) {
+                _BLOCKS_XL = pmd->next;
+                pmd->next->prev = NULL;
+            }
+            else{
+                pmd->prev->next = pmd->next;
+                pmd->next->prev = pmd->prev;
+            }
+        }
+    }
+    munmap(p, pmd->size + _size_meta_data());
 }
+
+bool small_block(size_t size) { return size < BIN_SIZE * SIZE_BINS_NUMBER; }
 
 void unite_free_blocks_on_both_sides(MallocMetadata *pmd) {
     if(pmd->next != NULL && pmd->next->is_free) unite_adjacent_blocks(pmd, pmd->next);
@@ -254,8 +273,8 @@ void copy_data(const void *from, const void *to, size_t size) {
 void set_zeroes(const void *new_block, size_t num, size_t size) { for (size_t i = 0; i < num * size; ++i) *((char*)new_block + _size_meta_data() + i) = 0; }
 
 void *allocate_new_block(size_t size) {
-    if (size < BIN_SIZE*SIZE_BINS_NUMBER){
-        if (no_blocks_allocated()) return init_blocks_list_and_size_table(size);
+    if (small_block(size)){
+        if (no_blocks_allocated(_BLOCKS)) return init_blocks_list_and_size_table(size);
 
         if (_LAST->is_free) return expand_last_block(size);
 
@@ -265,9 +284,25 @@ void *allocate_new_block(size_t size) {
         return sbrk_success(sbrk(size)) ? _LAST : SMALLOC_FAIL_VALUE;
     }else{
         void *out =
-                mmap(NULL, size, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, 0, 0);
+                mmap(NULL, size + _size_meta_data(), PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, 0, 0);
         if(out == MAP_FAILED) return NULL;
-
+        MallocMetadata* pmd = (MallocMetadata*)out;
+        pmd->size = size;
+        pmd->is_free = false;
+        pmd->next_size = NULL;
+        pmd->prev_size = NULL;
+        if (no_blocks_allocated(_BLOCKS_XL)){
+            _BLOCKS_XL = pmd;
+            _LAST_XL = _BLOCKS_XL;
+            pmd->next = NULL;
+            pmd->prev = NULL;
+        } else{
+            _LAST_XL->next = pmd;
+            pmd->next = NULL;
+            pmd->prev = _LAST_XL;
+            _LAST_XL = pmd;
+        }
+        return out;
     }
 }
 
@@ -357,7 +392,7 @@ void *init_blocks_list(size_t size) {
 
 MallocMetadata *allocate_metadata() { return (MallocMetadata*)(sbrk(_size_meta_data())); }
 
-bool no_blocks_allocated() { return _BLOCKS == NULL; }
+bool no_blocks_allocated(MallocMetadata *blocks_list) { return blocks_list == NULL; }
 
 void allocate_first_block(size_t size) {
     _LAST = _BLOCKS;

@@ -13,15 +13,40 @@ void test_challenge_0_1();
 
 void test_challenge_2();
 
+void test_ch_3();
+
 int main() {
 //    test_malloc_1();
 //    test_malloc_2();
-    std::cout << std::endl << "Malloc 3:" << std::endl << std::endl;
+//    std::cout << std::endl << "Malloc 3:" << std::endl << std::endl;
 
 //    test_challenge_0_1();
 
 //    test_challenge_2();
 
+    test_ch_3();
+    void* big = smalloc(200*1024);
+    print_malloc_2_metrics();
+    void* big2 = smalloc(600*1024);
+    print_malloc_2_metrics();
+    sfree(big);
+    print_malloc_2_metrics();
+    big = smalloc(200*1024);
+    void* big3 = smalloc(2000*1024);
+    print_malloc_2_metrics();
+    sfree(big);
+    print_malloc_2_metrics();
+    sfree(big3);
+    print_malloc_2_metrics();
+    //
+//    void *first_to_merge = smalloc(1024+512);
+//    void *second_to_merge = smalloc(1024+512);
+//    print_malloc_2_metrics();
+
+    return 0;
+}
+
+void test_ch_3() {
     void *fill1 = smalloc(142);
     void *fill2 = smalloc(300);
     void *fill3 = smalloc(90*1024+100);
@@ -36,12 +61,6 @@ int main() {
     print_malloc_2_metrics();
     wilderness = smalloc(100);
     print_malloc_2_metrics();
-//
-//    void *first_to_merge = smalloc(1024+512);
-//    void *second_to_merge = smalloc(1024+512);
-//    print_malloc_2_metrics();
-
-    return 0;
 }
 
 void test_challenge_2() {
