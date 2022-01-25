@@ -160,7 +160,7 @@ void *repurposeBlock(MallocMetadata *block, size_t wanted) {
     size_t full = block->size;
     size_t remaining_space = full - wanted;
     if (large_enough(remaining_space)) divide_block(block, wanted, full, remaining_space);
-    return block;
+    return block + _size_meta_data();
 }
 
 void divide_block(MallocMetadata *block, size_t wanted, size_t full, size_t remaining_space) {
@@ -216,8 +216,21 @@ MallocMetadata *seperate_block(const MallocMetadata *block, size_t wanted) {
 }
 
 void sfree(void *p) {
-    struct MallocMetadata* pmd = (MallocMetadata*) p;
+    struct MallocMetadata* pmd = (MallocMetadata*) ((char*)p - _size_meta_data());
     if (small_block(pmd->size)){
+//        if (pmd->next == NULL){
+//            if(pmd->prev == NULL){
+//                undo_list_init();
+//            }else{
+//                pmd->prev->next = NULL;
+//                _LAST = pmd->prev;
+//            }
+//            remove_old_block_from_bins(pmd, pmd->size);
+//            sbrk(-(pmd->size));
+//            pmd->size = 0;
+//            pmd->is_free = true;
+//            return;
+//        }
         pmd->is_free = true;
         unite_free_blocks_on_both_sides(pmd);
     } else{
@@ -269,7 +282,13 @@ void *scalloc(size_t num, size_t size) {
 }
 
 void *srealloc(void *oldp, size_t size) {
-    if (oldp == NULL) return allocate_new_block(size);
+    if (oldp == NULL){
+        for(size_t bin = size / BIN_SIZE; bin < SIZE_BINS_NUMBER; ++bin)
+            for (MallocMetadata* iter = _BLOCKS_BY_SIZE[bin]; iter != NULL; iter = iter->next_size)
+                if(block_fits(iter, size)) return repurposeBlock(iter, size);
+
+        return allocate_new_block(size);
+    } return allocate_new_block(size);
     struct MallocMetadata* mdp = (MallocMetadata*) oldp;
     if (size <= mdp->size)
         return use_same_block(oldp, size, mdp);
@@ -344,7 +363,7 @@ void *allocate_new_block(size_t size) {
         _LAST->next = allocate_metadata();
         if (!sbrk_success(_LAST->next)) return undo_new_block();
         init_new_block(size);
-        return sbrk_success(sbrk(size)) ? _LAST : SMALLOC_FAIL_VALUE;
+        return sbrk_success(sbrk(size)) ? _LAST + _size_meta_data() : SMALLOC_FAIL_VALUE;
     }else{
         void *out =
                 mmap(NULL, size + _size_meta_data(), PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, 0, 0);
@@ -365,7 +384,7 @@ void *allocate_new_block(size_t size) {
             pmd->prev = _LAST_XL;
             _LAST_XL = pmd;
         }
-        return out;
+        return (char*)out + _size_meta_data();
     }
 }
 
@@ -377,7 +396,7 @@ void *expand_last_block(size_t size) {
     _LAST->is_free = false;
     insert_block_to_size_bins(_LAST);
 
-    return _LAST;
+    return _LAST + _size_meta_data();
 }
 
 void *init_blocks_list_and_size_table(size_t size) {
@@ -385,7 +404,7 @@ void *init_blocks_list_and_size_table(size_t size) {
     size_t bin = size / BIN_SIZE;
     _BLOCKS_BY_SIZE[bin] = (MallocMetadata*)out;
     _LAST_BY_SIZE[bin] = _BLOCKS_BY_SIZE[bin];
-    return out;
+    return (char*)out + _size_meta_data();
 }
 
 void init_new_block(size_t size) {

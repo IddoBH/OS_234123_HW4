@@ -62,18 +62,20 @@ void* smalloc(size_t size){
 
 bool block_fits(const MallocMetadata *block, size_t wanted) { return block->is_free && block->size >= wanted; }
 
+size_t _size_meta_data() {
+    return sizeof(struct MallocMetadata);
+}
+
 void *repurposeBlock(MallocMetadata *block) {
     block->is_free = false;
-    return block;
+    return ((char*)block + _size_meta_data());
 }
 
 void sfree(void *p) {
-    struct MallocMetadata* pmd = (MallocMetadata*) p;
-    pmd->is_free = true;
-}
-
-size_t _size_meta_data() {
-    return sizeof(struct MallocMetadata);
+    if (p != NULL) {
+        struct MallocMetadata *pmd = (MallocMetadata *) ((char *) p - _size_meta_data());
+        pmd->is_free = true;
+    }
 }
 
 size_t _num_allocated_blocks() {
@@ -118,8 +120,9 @@ void *scalloc(size_t num, size_t size) {
 }
 
 void *srealloc(void *oldp, size_t size) {
-    if (oldp == NULL) return allocate_new_block(size);
-    struct MallocMetadata* mdp = (MallocMetadata*) oldp;
+    if (size <= 0) return SMALLOC_FAIL_VALUE;
+    if (oldp == NULL) return smalloc(size);
+    struct MallocMetadata* mdp = (MallocMetadata*) ((char*)oldp - _size_meta_data());
     if (size <= mdp->size) return oldp;
     void* out = smalloc(size);
     if(out == SMALLOC_FAIL_VALUE) return SMALLOC_FAIL_VALUE;
@@ -129,17 +132,22 @@ void *srealloc(void *oldp, size_t size) {
 }
 
 void copy_data(const void *from, const void *to, size_t size) {
-    struct MallocMetadata* mdp = (MallocMetadata*) from;
-    for (size_t i = 0; i < size && i < mdp->size; ++i) *((char*)to + _size_meta_data() + i) = *((char*)from + _size_meta_data() + i);
+    struct MallocMetadata* mdp = (MallocMetadata*) ((char*)from - _size_meta_data());
+    for (size_t i = 0; i < size && i < mdp->size; ++i) *((char*)to + i) = *((char*)from + i);
 }
 
-void set_zeroes(const void *new_block, size_t num, size_t size) { for (size_t i = 0; i < num * size; ++i) *((char*)new_block + _size_meta_data() + i) = 0; }
+void set_zeroes(const void *new_block, size_t num, size_t size) { for (size_t i = 0; i < num * size; ++i) *((char*)new_block + i) = 0; }
 
 void *allocate_new_block(size_t size) {
-    _LAST->next = allocate_metadata();
-    if (!sbrk_success(_LAST->next)) return undo_new_block();
-    init_new_block(size);
-    return sbrk_success(sbrk(size)) ? _LAST : SMALLOC_FAIL_VALUE;
+    if (no_blocks_allocated()){
+        return init_blocks_list(size);
+    }
+    else{
+        _LAST->next = allocate_metadata();
+        if (!sbrk_success(_LAST->next)) return undo_new_block();
+        init_new_block(size);
+        return sbrk_success(sbrk(size)) ? ((char *) _LAST + _size_meta_data()) : SMALLOC_FAIL_VALUE;
+    }
 }
 
 void init_new_block(size_t size) {
@@ -160,7 +168,7 @@ void *init_blocks_list(size_t size) {
     if (!sbrk_success(_BLOCKS)) return undo_list_init();
     allocate_first_block(size);
     if (!sbrk_success(sbrk(size))) return undo_list_init();
-    return _BLOCKS;
+    return ((char*)_BLOCKS + _size_meta_data());
 }
 
 MallocMetadata *allocate_metadata() { return (MallocMetadata*)(sbrk(_size_meta_data())); }
